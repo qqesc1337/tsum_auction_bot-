@@ -11,7 +11,7 @@ class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
 
-# ========== INLINE МЕНЮ (кнопки в сообщении) ==========
+# ========== INLINE МЕНЮ (только в сообщении) ==========
 def main_menu_inline(is_admin=False, is_owner=False):
     keyboard = [
         [InlineKeyboardButton(text="📊 Моя статистика", callback_data="my_stats"),
