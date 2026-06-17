@@ -4,8 +4,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from database import SessionLocal, User, Review, Achievement, Lot, Favorite
 from config import OWNER_ID, ADMIN_IDS
-from datetime import datetime
+from datetime import datetime, timedelta
 import random
+from sqlalchemy import func
 
 router = Router()
 
@@ -495,3 +496,304 @@ async def top_users_callback(callback: CallbackQuery):
     
     await callback.message.edit_text(text, reply_markup=main_menu())
     await callback.answer()
+
+# ========== АДМИН-КОМАНДЫ ==========
+
+@router.message(F.text == "/id")
+async def show_user_id(message: Message):
+    """Показывает ID пользователя"""
+    await message.answer(
+        f"🆔 Ваш Telegram ID: <code>{message.from_user.id}</code>\n\n"
+        f"📌 Скопируйте этот ID для передачи владельцу бота."
+    )
+
+@router.message(F.text.startswith("/add_admin"))
+async def add_admin(message: Message):
+    """Добавляет администратора (только для владельца)"""
+    session = SessionLocal()
+    owner = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not owner or not owner.is_owner:
+        await message.answer("⛔ Только владелец бота может добавлять администраторов!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        if user.is_admin:
+            await message.answer(f"❌ {user.play_nick} уже администратор!")
+            session.close()
+            return
+        
+        if user.is_owner:
+            await message.answer(f"❌ {user.play_nick} является владельцем!")
+            session.close()
+            return
+        
+        user.is_admin = True
+        session.commit()
+        session.close()
+        
+        await message.answer(f"✅ {user.play_nick} (@{user.tg_username}) назначен администратором!")
+        
+        try:
+            await message.bot.send_message(
+                user.tg_id,
+                "🎉 Вы назначены администратором TSUM Auction!"
+            )
+        except:
+            pass
+            
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /add_admin [ID]")
+
+@router.message(F.text.startswith("/remove_admin"))
+async def remove_admin(message: Message):
+    """Удаляет администратора (только для владельца)"""
+    session = SessionLocal()
+    owner = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not owner or not owner.is_owner:
+        await message.answer("⛔ Только владелец бота может удалять администраторов!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        if not user.is_admin:
+            await message.answer(f"❌ {user.play_nick} не является администратором!")
+            session.close()
+            return
+        
+        if user.is_owner:
+            await message.answer(f"❌ Нельзя удалить владельца!")
+            session.close()
+            return
+        
+        user.is_admin = False
+        session.commit()
+        session.close()
+        
+        await message.answer(f"✅ {user.play_nick} лишен прав администратора!")
+        
+        try:
+            await message.bot.send_message(
+                user.tg_id,
+                "⛔ Вы лишены прав администратора TSUM Auction."
+            )
+        except:
+            pass
+            
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /remove_admin [ID]")
+
+@router.message(F.text == "/admins")
+async def list_admins(message: Message):
+    """Показывает список администраторов (только для владельца)"""
+    session = SessionLocal()
+    user = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not user or not user.is_owner:
+        await message.answer("⛔ Только владелец бота может смотреть список админов!")
+        session.close()
+        return
+    
+    admins = session.query(User).filter_by(is_admin=True).all()
+    session.close()
+    
+    if not admins:
+        await message.answer("📭 Администраторов нет.")
+        return
+    
+    text = "👑 Список администраторов:\n\n"
+    for admin in admins:
+        owner_tag = " (ВЛАДЕЛЕЦ)" if admin.is_owner else ""
+        text += f"• {admin.play_nick} (@{admin.tg_username}) [ID: {admin.tg_id}]{owner_tag}\n"
+    
+    await message.answer(text)
+
+@router.message(F.text.startswith("/ban"))
+async def ban_user(message: Message):
+    """Банит пользователя (только для админов и владельца)"""
+    session = SessionLocal()
+    admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not admin or not (admin.is_admin or admin.is_owner):
+        await message.answer("⛔ У вас нет прав администратора!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        if user.is_owner:
+            await message.answer("❌ Нельзя забанить владельца!")
+            session.close()
+            return
+        
+        user.is_banned = True
+        session.commit()
+        session.close()
+        
+        await message.answer(f"✅ {user.play_nick} (@{user.tg_username}) забанен!")
+        
+        try:
+            await message.bot.send_message(
+                user.tg_id,
+                "⛔ Вы были забанены в TSUM Auction!"
+            )
+        except:
+            pass
+            
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /ban [ID]")
+
+@router.message(F.text.startswith("/unban"))
+async def unban_user(message: Message):
+    """Разбанивает пользователя (только для админов и владельца)"""
+    session = SessionLocal()
+    admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not admin or not (admin.is_admin or admin.is_owner):
+        await message.answer("⛔ У вас нет прав администратора!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        user.is_banned = False
+        session.commit()
+        session.close()
+        
+        await message.answer(f"✅ {user.play_nick} (@{user.tg_username}) разбанен!")
+        
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /unban [ID]")
+
+@router.message(F.text.startswith("/scam"))
+async def scam_user(message: Message):
+    """Ставит метку СКАМЕР (только для админов и владельца)"""
+    session = SessionLocal()
+    admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not admin or not (admin.is_admin or admin.is_owner):
+        await message.answer("⛔ У вас нет прав администратора!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        if user.is_owner:
+            await message.answer("❌ Нельзя поставить метку на владельца!")
+            session.close()
+            return
+        
+        user.is_scammer = True
+        session.commit()
+        session.close()
+        
+        await message.answer(f"🚫 {user.play_nick} (@{user.tg_username}) помечен как СКАМЕР!")
+        
+        try:
+            await message.bot.send_message(
+                user.tg_id,
+                "🚫 Вы помечены как СКАМЕР в TSUM Auction!"
+            )
+        except:
+            pass
+            
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /scam [ID]")
+
+@router.message(F.text.startswith("/unscam"))
+async def unscam_user(message: Message):
+    """Снимает метку СКАМЕР (только для админов и владельца)"""
+    session = SessionLocal()
+    admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not admin or not (admin.is_admin or admin.is_owner):
+        await message.answer("⛔ У вас нет прав администратора!")
+        session.close()
+        return
+    
+    try:
+        user_id = int(message.text.split()[1])
+        user = session.query(User).filter_by(tg_id=user_id).first()
+        
+        if not user:
+            await message.answer(f"❌ Пользователь с ID {user_id} не найден.")
+            session.close()
+            return
+        
+        user.is_scammer = False
+        session.commit()
+        session.close()
+        
+        await message.answer(f"✅ С {user.play_nick} (@{user.tg_username}) снята метка СКАМ!")
+        
+    except (ValueError, IndexError):
+        await message.answer("❌ Используйте: /unscam [ID]")
+
+@router.message(F.text == "/stats")
+async def full_stats(message: Message):
+    """Показывает полную статистику бота (только для админов и владельца)"""
+    session = SessionLocal()
+    admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
+    
+    if not admin or not (admin.is_admin or admin.is_owner):
+        await message.answer("⛔ У вас нет прав администратора!")
+        session.close()
+        return
+    
+    total_users = session.query(User).count()
+    banned = session.query(User).filter_by(is_banned=True).count()
+    scammers = session.query(User).filter_by(is_scammer=True).count()
+    active_lots = session.query(Lot).filter_by(is_active=True).count()
+    sold_lots = session.query(Lot).filter_by(is_sold=True).count()
+    total_amount = session.query(func.sum(Lot.current_price)).filter_by(is_sold=True).scalar() or 0
+    
+    session.close()
+    
+    await message.answer(
+        f"📊 <b>Статистика бота TSUM Auction</b>\n\n"
+        f"👥 Всего пользователей: {total_users}\n"
+        f"⛔ Забанено: {banned}\n"
+        f"🚫 Скамеров: {scammers}\n"
+        f"📋 Активных лотов: {active_lots}\n"
+        f"✅ Продано лотов: {sold_lots}\n"
+        f"💰 Общая сумма сделок: {total_amount:,.0f}$"
+    )
