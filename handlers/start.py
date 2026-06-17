@@ -26,6 +26,7 @@ def main_menu_inline(is_admin=False, is_owner=False):
          InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
         [InlineKeyboardButton(text="🏆 Топ пользователей", callback_data="top_users")]
     ]
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
     
     if is_admin or is_owner:
         keyboard.append([InlineKeyboardButton(text="🛠 Админ-панель", callback_data="admin_panel")])
