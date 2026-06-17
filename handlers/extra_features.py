@@ -11,7 +11,6 @@ router = Router()
 class SearchState(StatesGroup):
     query = State()
 
-@router.message(F.text == "⭐ Избранное")
 async def show_favorites(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
@@ -39,7 +38,6 @@ async def show_favorites(message: Message):
     await message.answer(text)
     session.close()
 
-@router.message(F.text == "🎲 Случайный лот")
 async def random_lot(message: Message):
     session = SessionLocal()
     lots = session.query(Lot).filter_by(is_active=True).all()
@@ -57,7 +55,6 @@ async def random_lot(message: Message):
         f"⏰ Завершится: {lot.end_time.strftime('%d.%m.%Y %H:%M')}"
     )
 
-@router.message(F.text == "🔍 Поиск")
 async def search_start(message: Message, state: FSMContext):
     await message.answer("🔍 Введите название лота для поиска:")
     await state.set_state(SearchState.query)
@@ -88,7 +85,6 @@ async def search_process(message: Message, state: FSMContext):
     await message.answer(text)
     await state.clear()
 
-@router.message(F.text == "📖 Инструкция")
 async def show_instructions(message: Message):
     text = """
 📖 <b>ИНСТРУКЦИЯ ПО TSUM AUCTION</b>
@@ -128,7 +124,6 @@ async def show_instructions(message: Message):
     """
     await message.answer(text)
 
-@router.message(F.text == "🏆 Топ пользователей")
 async def top_users(message: Message):
     session = SessionLocal()
     users = session.query(User).order_by(User.deals_count.desc()).limit(10).all()
@@ -148,7 +143,6 @@ async def top_users(message: Message):
     
     await message.answer(text)
 
-@router.message(F.text == "🏆 Достижения")
 async def show_achievements(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
