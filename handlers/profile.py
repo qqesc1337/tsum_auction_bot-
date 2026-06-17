@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from database import SessionLocal, User, Review, Achievement
+from database import SessionLocal, User, Review, Achievement, Lot
 
 router = Router()
 
