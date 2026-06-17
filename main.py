@@ -1,7 +1,6 @@
 import asyncio
 import logging
 from aiogram import Bot, Dispatcher
-from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from config import BOT_TOKEN
 from handlers import start, auction, profile, admin, bets, admin_manage, extra_features, deal_confirm
@@ -14,10 +13,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def main():
-    bot = Bot(
-        token=BOT_TOKEN,
-        default=DefaultBotProperties(parse_mode=ParseMode.HTML)
-    )
+    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
     dp = Dispatcher()
     
     dp.include_router(start.router)
