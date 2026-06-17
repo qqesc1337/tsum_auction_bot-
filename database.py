@@ -5,18 +5,102 @@ from datetime import datetime
 from config import DATABASE_URL
 import os
 
-# Если на Railway — используем PostgreSQL, иначе SQLite
 if "postgres" in DATABASE_URL:
-    # PostgreSQL (Railway)
     engine = create_engine(DATABASE_URL)
 else:
-    # SQLite (локально)
     engine = create_engine(DATABASE_URL, connect_args={'check_same_thread': False})
 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# ... ВСЕ ТВОИ МОДЕЛИ (User, Lot, Transaction, Review, Achievement, Report, Favorite, BlackList) ...
+class User(Base):
+    __tablename__ = 'users'
+    id = Column(Integer, primary_key=True)
+    tg_id = Column(Integer, unique=True, index=True)
+    tg_username = Column(String)
+    play_nick = Column(String, unique=True)
+    rating = Column(Float, default=5.0)
+    deals_count = Column(Integer, default=0)
+    is_banned = Column(Boolean, default=False)
+    is_scammer = Column(Boolean, default=False)
+    is_admin = Column(Boolean, default=False)
+    is_owner = Column(Boolean, default=False)
+    registration_date = Column(DateTime, default=datetime.utcnow)
+    last_activity = Column(DateTime, default=datetime.utcnow)
+    
+    lots = relationship("Lot", foreign_keys="Lot.seller_id")
+    purchases = relationship("Lot", foreign_keys="Lot.buyer_id")
+
+class Lot(Base):
+    __tablename__ = 'lots'
+    id = Column(Integer, primary_key=True)
+    seller_id = Column(Integer, ForeignKey('users.tg_id'))
+    title = Column(String)
+    description = Column(Text)
+    photo_id = Column(String)
+    start_price = Column(Float)
+    current_price = Column(Float)
+    min_bet = Column(Float)
+    end_time = Column(DateTime)
+    is_active = Column(Boolean, default=True)
+    is_sold = Column(Boolean, default=False)
+    buyer_id = Column(Integer, ForeignKey('users.tg_id'), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_bidder_id = Column(Integer, ForeignKey('users.tg_id'), nullable=True)
+    views_count = Column(Integer, default=0)
+    bid_count = Column(Integer, default=0)
+    confirmed_by_seller = Column(Boolean, default=False)
+    confirmed_by_buyer = Column(Boolean, default=False)
+
+class Transaction(Base):
+    __tablename__ = 'transactions'
+    id = Column(Integer, primary_key=True)
+    lot_id = Column(Integer, ForeignKey('lots.id'))
+    seller_id = Column(Integer, ForeignKey('users.tg_id'))
+    buyer_id = Column(Integer, ForeignKey('users.tg_id'))
+    price = Column(Float)
+    date = Column(DateTime, default=datetime.utcnow)
+
+class Review(Base):
+    __tablename__ = 'reviews'
+    id = Column(Integer, primary_key=True)
+    target_id = Column(Integer, ForeignKey('users.tg_id'))
+    author_id = Column(Integer, ForeignKey('users.tg_id'))
+    text = Column(Text)
+    rating = Column(Integer)
+    date = Column(DateTime, default=datetime.utcnow)
+
+class Achievement(Base):
+    __tablename__ = 'achievements'
+    id = Column(Integer, primary_key=True)
+    name = Column(String)
+    icon = Column(String)
+    min_deals = Column(Integer)
+    description = Column(String)
+
+class Report(Base):
+    __tablename__ = 'reports'
+    id = Column(Integer, primary_key=True)
+    reporter_id = Column(Integer, ForeignKey('users.tg_id'))
+    reported_id = Column(Integer, ForeignKey('users.tg_id'))
+    reason = Column(Text)
+    date = Column(DateTime, default=datetime.utcnow)
+    status = Column(String, default="pending")
+
+class Favorite(Base):
+    __tablename__ = 'favorites'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.tg_id'))
+    lot_id = Column(Integer, ForeignKey('lots.id'))
+    date = Column(DateTime, default=datetime.utcnow)
+
+class BlackList(Base):
+    __tablename__ = 'blacklist'
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey('users.tg_id'))
+    blocked_user_id = Column(Integer, ForeignKey('users.tg_id'))
+    reason = Column(Text, nullable=True)
+    date = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(engine)
 
