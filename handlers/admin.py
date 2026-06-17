@@ -4,7 +4,6 @@ from database import SessionLocal, User, Report
 
 router = Router()
 
-@router.message(F.text == "🛠 Админ-панель")
 async def admin_panel(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
@@ -26,7 +25,6 @@ async def admin_panel(message: Message):
         f"/stats — статистика бота"
     )
 
-@router.message(F.text == "👑 Управление админами")
 async def admin_manage(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
