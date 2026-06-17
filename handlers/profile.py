@@ -11,15 +11,13 @@ class ReviewState(StatesGroup):
     text = State()
 
 # ========== ПРОФИЛЬ ==========
-@router.callback_query(F.data == "my_profile")
-async def my_profile_callback(callback: CallbackQuery):
+async def show_my_profile(message: Message):
     session = SessionLocal()
-    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
     if not user:
-        await callback.message.answer("❌ Ты не зарегистрирован! Напиши /start")
+        await message.answer("❌ Сначала зарегистрируйтесь /start")
         session.close()
-        await callback.answer()
         return
     
     achievement = session.query(Achievement).filter(
@@ -43,20 +41,17 @@ async def my_profile_callback(callback: CallbackQuery):
     text += f"📊 Статус: {ban_label}\n"
     text += f"🔰 {scam_label}"
     
-    await callback.message.answer(text)
+    await message.answer(text)
     session.close()
-    await callback.answer()
 
 # ========== СТАТИСТИКА ==========
-@router.callback_query(F.data == "my_stats")
-async def my_stats_callback(callback: CallbackQuery):
+async def my_stats(message: Message):
     session = SessionLocal()
-    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
     if not user:
-        await callback.message.answer("❌ Ты не зарегистрирован! Напиши /start")
+        await message.answer("❌ Сначала зарегистрируйтесь!")
         session.close()
-        await callback.answer()
         return
     
     active_lots = session.query(Lot).filter_by(seller_id=user.tg_id, is_active=True).count()
@@ -77,6 +72,5 @@ async def my_stats_callback(callback: CallbackQuery):
     if achievement:
         text += f"\n🏅 Текущее достижение: {achievement.icon} {achievement.name}"
     
-    await callback.message.answer(text)
+    await message.answer(text)
     session.close()
-    await callback.answer()
