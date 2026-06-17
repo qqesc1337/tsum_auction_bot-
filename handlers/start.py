@@ -11,7 +11,7 @@ class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
 
-# ========== INLINE МЕНЮ (только в сообщении) ==========
+# ========== INLINE МЕНЮ ==========
 def main_menu_inline(is_admin=False, is_owner=False):
     keyboard = [
         [InlineKeyboardButton(text="📊 Моя статистика", callback_data="my_stats"),
@@ -113,16 +113,16 @@ async def reg_play(message: Message, state: FSMContext):
     await state.clear()
 
 # ========== ОБРАБОТЧИКИ INLINE КНОПОК ==========
-@router.callback_query(F.data == "my_profile")
-async def my_profile_callback(callback: CallbackQuery):
-    from handlers.profile import show_my_profile
-    await show_my_profile(callback.message)
-    await callback.answer()
-
 @router.callback_query(F.data == "my_stats")
 async def my_stats_callback(callback: CallbackQuery):
     from handlers.profile import my_stats
     await my_stats(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "my_profile")
+async def my_profile_callback(callback: CallbackQuery):
+    from handlers.profile import show_my_profile
+    await show_my_profile(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "create_lot")
