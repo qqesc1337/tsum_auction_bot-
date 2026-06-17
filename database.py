@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, Boolean, ForeignKey, Text
+from sqlalchemy import create_engine, Column, Integer, BigInteger, String, Float, DateTime, Boolean, ForeignKey, Text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship
 from datetime import datetime
@@ -17,7 +17,7 @@ Base = declarative_base()
 class User(Base):
     __tablename__ = 'users'
     id = Column(Integer, primary_key=True)
-    tg_id = Column(Integer, unique=True, index=True)
+    tg_id = Column(BigInteger, unique=True, index=True)  # ← ИЗМЕНЕНО НА BigInteger
     tg_username = Column(String)
     play_nick = Column(String, unique=True)
     rating = Column(Float, default=5.0)
@@ -35,7 +35,7 @@ class User(Base):
 class Lot(Base):
     __tablename__ = 'lots'
     id = Column(Integer, primary_key=True)
-    seller_id = Column(Integer, ForeignKey('users.tg_id'))
+    seller_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     title = Column(String)
     description = Column(Text)
     photo_id = Column(String)
@@ -45,9 +45,9 @@ class Lot(Base):
     end_time = Column(DateTime)
     is_active = Column(Boolean, default=True)
     is_sold = Column(Boolean, default=False)
-    buyer_id = Column(Integer, ForeignKey('users.tg_id'), nullable=True)
+    buyer_id = Column(BigInteger, ForeignKey('users.tg_id'), nullable=True)  # ← ИЗМЕНЕНО
     created_at = Column(DateTime, default=datetime.utcnow)
-    last_bidder_id = Column(Integer, ForeignKey('users.tg_id'), nullable=True)
+    last_bidder_id = Column(BigInteger, ForeignKey('users.tg_id'), nullable=True)  # ← ИЗМЕНЕНО
     views_count = Column(Integer, default=0)
     bid_count = Column(Integer, default=0)
     confirmed_by_seller = Column(Boolean, default=False)
@@ -57,16 +57,16 @@ class Transaction(Base):
     __tablename__ = 'transactions'
     id = Column(Integer, primary_key=True)
     lot_id = Column(Integer, ForeignKey('lots.id'))
-    seller_id = Column(Integer, ForeignKey('users.tg_id'))
-    buyer_id = Column(Integer, ForeignKey('users.tg_id'))
+    seller_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
+    buyer_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     price = Column(Float)
     date = Column(DateTime, default=datetime.utcnow)
 
 class Review(Base):
     __tablename__ = 'reviews'
     id = Column(Integer, primary_key=True)
-    target_id = Column(Integer, ForeignKey('users.tg_id'))
-    author_id = Column(Integer, ForeignKey('users.tg_id'))
+    target_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
+    author_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     text = Column(Text)
     rating = Column(Integer)
     date = Column(DateTime, default=datetime.utcnow)
@@ -82,8 +82,8 @@ class Achievement(Base):
 class Report(Base):
     __tablename__ = 'reports'
     id = Column(Integer, primary_key=True)
-    reporter_id = Column(Integer, ForeignKey('users.tg_id'))
-    reported_id = Column(Integer, ForeignKey('users.tg_id'))
+    reporter_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
+    reported_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     reason = Column(Text)
     date = Column(DateTime, default=datetime.utcnow)
     status = Column(String, default="pending")
@@ -91,15 +91,15 @@ class Report(Base):
 class Favorite(Base):
     __tablename__ = 'favorites'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.tg_id'))
+    user_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     lot_id = Column(Integer, ForeignKey('lots.id'))
     date = Column(DateTime, default=datetime.utcnow)
 
 class BlackList(Base):
     __tablename__ = 'blacklist'
     id = Column(Integer, primary_key=True)
-    user_id = Column(Integer, ForeignKey('users.tg_id'))
-    blocked_user_id = Column(Integer, ForeignKey('users.tg_id'))
+    user_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
+    blocked_user_id = Column(BigInteger, ForeignKey('users.tg_id'))  # ← ИЗМЕНЕНО
     reason = Column(Text, nullable=True)
     date = Column(DateTime, default=datetime.utcnow)
 
