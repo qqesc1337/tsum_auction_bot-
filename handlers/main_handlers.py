@@ -10,6 +10,7 @@ from sqlalchemy import func
 
 router = Router()
 
+# ========== FSM СОСТОЯНИЯ ==========
 class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
@@ -23,6 +24,9 @@ class CreateLotState(StatesGroup):
 
 class SearchState(StatesGroup):
     query = State()
+
+class BetState(StatesGroup):
+    custom_bet = State()
 
 # ========== МЕНЮ ==========
 def main_menu():
@@ -276,7 +280,7 @@ async def lot_duration(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("❌ Введите число минут!")
 
-# ========== АКТИВНЫЕ АУКЦИОНЫ ==========
+# ========== АКТИВНЫЕ АУКЦИОНЫ (С КНОПКАМИ) ==========
 @router.callback_query(F.data == "active_lots")
 async def active_lots_callback(callback: CallbackQuery):
     session = SessionLocal()
@@ -289,15 +293,31 @@ async def active_lots_callback(callback: CallbackQuery):
         return
     
     text = "📋 <b>Активные аукционы:</b>\n\n"
+    
+    keyboard = []
     for i, lot in enumerate(lots[:10], 1):
         time_left = lot.end_time - datetime.utcnow()
         minutes = int(time_left.total_seconds() / 60)
-        text += f"{i}. {lot.title} — {lot.current_price:,.0f}$ (⏳ {minutes} мин.)\n"
+        hours = int(minutes / 60)
+        if hours > 0:
+            time_str = f"{hours}ч {minutes % 60}мин"
+        else:
+            time_str = f"{minutes}мин"
+        text += f"{i}. {lot.title} — {lot.current_price:,.0f}$ (⏳ {time_str})\n"
+        keyboard.append([InlineKeyboardButton(
+            text=f"👁️ Лот #{lot.id}",
+            callback_data=f"view_lot_{lot.id}"
+        )])
     
     if len(lots) > 10:
         text += f"\n... и еще {len(lots) - 10} лотов"
     
-    await callback.message.edit_text(text, reply_markup=main_menu())
+    keyboard.append([InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_menu")])
+    
+    await callback.message.edit_text(
+        text, 
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
     await callback.answer()
 
 # ========== МОИ ЛОТЫ ==========
@@ -448,6 +468,7 @@ async def instructions_callback(callback: CallbackQuery):
 
 <b>3️⃣ Участие в аукционе</b>
 • Найди лот в "📋 Активные аукционы"
+• Нажми "👁️ Лот" чтобы посмотреть
 • Нажми "💰 Сделать ставку"
 • Выбери сумму или введи свою
 
@@ -497,11 +518,262 @@ async def top_users_callback(callback: CallbackQuery):
     await callback.message.edit_text(text, reply_markup=main_menu())
     await callback.answer()
 
-# ========== АДМИН-КОМАНДЫ ==========
+# ========== ПРОСМОТР ЛОТА ==========
+@router.callback_query(F.data.startswith("view_lot_"))
+async def view_lot(callback: CallbackQuery):
+    lot_id = int(callback.data.split("_")[2])
+    
+    session = SessionLocal()
+    lot = session.query(Lot).filter_by(id=lot_id).first()
+    
+    if not lot:
+        await callback.message.edit_text("❌ Лот не найден.", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    seller = session.query(User).filter_by(tg_id=lot.seller_id).first()
+    time_left = lot.end_time - datetime.utcnow()
+    minutes = int(time_left.total_seconds() / 60)
+    hours = int(minutes / 60)
+    if hours > 0:
+        time_str = f"{hours}ч {minutes % 60}мин"
+    else:
+        time_str = f"{minutes}мин"
+    
+    text = f"📌 <b>{lot.title}</b>\n\n"
+    text += f"📄 {lot.description}\n"
+    text += f"💰 Текущая цена: <b>{lot.current_price:,.0f}$</b>\n"
+    text += f"📈 Ставок: {lot.bid_count}\n"
+    text += f"⏰ Осталось: {time_str}\n"
+    text += f"👤 Продавец: {seller.play_nick} (@{seller.tg_username})\n"
+    text += f"⭐ Рейтинг продавца: {seller.rating:.1f}\n"
+    text += f"🆔 ID лота: {lot.id}"
+    
+    keyboard = []
+    
+    if lot.is_active and callback.from_user.id != lot.seller_id:
+        keyboard.append([InlineKeyboardButton(
+            text="💰 Сделать ставку",
+            callback_data=f"place_bet_{lot_id}"
+        )])
+    
+    keyboard.append([InlineKeyboardButton(
+        text="↩️ Назад к списку",
+        callback_data="back_to_lots"
+    )])
+    
+    keyboard.append([InlineKeyboardButton(
+        text="🏠 Главное меню",
+        callback_data="back_to_menu"
+    )])
+    
+    await callback.message.edit_text(
+        text,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    session.close()
+    await callback.answer()
 
+# ========== СТАВКИ ==========
+@router.callback_query(F.data.startswith("place_bet_"))
+async def place_bet_start(callback: CallbackQuery, state: FSMContext):
+    lot_id = int(callback.data.split("_")[2])
+    
+    session = SessionLocal()
+    lot = session.query(Lot).filter_by(id=lot_id).first()
+    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    
+    if not lot or not lot.is_active:
+        await callback.message.edit_text("❌ Аукцион уже завершен!", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    if not user:
+        await callback.message.edit_text("❌ Сначала зарегистрируйтесь /start")
+        await callback.answer()
+        session.close()
+        return
+    
+    if user.is_banned:
+        await callback.message.edit_text("⛔ Вы забанены!", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    if user.is_scammer:
+        await callback.message.edit_text("⛔ Вы помечены как скамер!", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    if lot.seller_id == callback.from_user.id:
+        await callback.message.edit_text("❌ Вы не можете делать ставку на свой лот!", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    await state.update_data(lot_id=lot_id)
+    
+    next_bet = lot.current_price * 1.05
+    
+    keyboard = [
+        [InlineKeyboardButton(
+            text=f"💵 {int(next_bet):,}$ (+5%)",
+            callback_data=f"bet_quick_{lot_id}_{int(next_bet)}"
+        )],
+        [InlineKeyboardButton(
+            text=f"💵 {int(next_bet * 1.1):,}$ (+10%)",
+            callback_data=f"bet_quick_{lot_id}_{int(next_bet * 1.1)}"
+        )],
+        [InlineKeyboardButton(
+            text=f"💵 {int(next_bet * 1.2):,}$ (+20%)",
+            callback_data=f"bet_quick_{lot_id}_{int(next_bet * 1.2)}"
+        )],
+        [InlineKeyboardButton(
+            text="✏️ Своя сумма",
+            callback_data=f"bet_custom_{lot_id}"
+        )],
+        [InlineKeyboardButton(
+            text="↩️ Назад к лоту",
+            callback_data=f"view_lot_{lot_id}"
+        )]
+    ]
+    
+    await callback.message.edit_text(
+        f"💰 <b>Ставка на лот: {lot.title}</b>\n\n"
+        f"Текущая цена: <b>{lot.current_price:,.0f}$</b>\n"
+        f"Минимальная следующая ставка: <b>{next_bet:,.0f}$</b>\n\n"
+        f"Выберите сумму или введите свою:",
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=keyboard)
+    )
+    session.close()
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("bet_quick_"))
+async def quick_bet(callback: CallbackQuery):
+    _, _, lot_id, amount = callback.data.split("_")
+    lot_id = int(lot_id)
+    amount = float(amount)
+    
+    session = SessionLocal()
+    lot = session.query(Lot).filter_by(id=lot_id).first()
+    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    
+    if not lot or not lot.is_active:
+        await callback.message.edit_text("❌ Аукцион уже завершен!", reply_markup=main_menu())
+        await callback.answer()
+        session.close()
+        return
+    
+    if amount < lot.min_bet:
+        await callback.answer(f"❌ Минимальная ставка: {lot.min_bet:,.0f}$")
+        session.close()
+        return
+    
+    lot.current_price = amount
+    lot.min_bet = amount * 1.05
+    lot.last_bidder_id = callback.from_user.id
+    lot.bid_count += 1
+    
+    session.commit()
+    session.close()
+    
+    await callback.message.edit_text(
+        f"✅ <b>Ставка принята!</b>\n\n"
+        f"📌 {lot.title}\n"
+        f"💰 Новая цена: <b>{amount:,.0f}$</b>\n"
+        f"👤 Последний: @{user.tg_username}\n\n"
+        f"⏰ Аукцион завершится через: {int((lot.end_time - datetime.utcnow()).total_seconds() / 60)} мин.",
+        reply_markup=main_menu()
+    )
+    await callback.answer()
+
+@router.callback_query(F.data.startswith("bet_custom_"))
+async def custom_bet_start(callback: CallbackQuery, state: FSMContext):
+    lot_id = int(callback.data.split("_")[2])
+    await state.update_data(lot_id=lot_id)
+    
+    session = SessionLocal()
+    lot = session.query(Lot).filter_by(id=lot_id).first()
+    session.close()
+    
+    await callback.message.edit_text(
+        f"✏️ Введите сумму ставки (минимум {lot.min_bet:,.0f}$):"
+    )
+    await state.set_state(BetState.custom_bet)
+    await callback.answer()
+
+@router.message(BetState.custom_bet)
+async def custom_bet_process(message: Message, state: FSMContext):
+    try:
+        amount = float(message.text.replace(',', '.'))
+        data = await state.get_data()
+        lot_id = data['lot_id']
+        
+        session = SessionLocal()
+        lot = session.query(Lot).filter_by(id=lot_id).first()
+        user = session.query(User).filter_by(tg_id=message.from_user.id).first()
+        
+        if not lot or not lot.is_active:
+            await message.answer("❌ Аукцион уже завершен!", reply_markup=main_menu())
+            await state.clear()
+            session.close()
+            return
+        
+        if amount < lot.min_bet:
+            await message.answer(f"❌ Минимальная ставка: {lot.min_bet:,.0f}$")
+            session.close()
+            return
+        
+        lot.current_price = amount
+        lot.min_bet = amount * 1.05
+        lot.last_bidder_id = message.from_user.id
+        lot.bid_count += 1
+        
+        session.commit()
+        session.close()
+        
+        await message.answer(
+            f"✅ <b>Ставка принята!</b>\n\n"
+            f"📌 {lot.title}\n"
+            f"💰 Новая цена: <b>{amount:,.0f}$</b>\n"
+            f"👤 Последний: @{user.tg_username}",
+            reply_markup=main_menu()
+        )
+        await state.clear()
+        
+    except ValueError:
+        await message.answer("❌ Введите число!")
+
+# ========== НАВИГАЦИЯ ==========
+@router.callback_query(F.data == "back_to_lots")
+async def back_to_lots(callback: CallbackQuery):
+    await active_lots_callback(callback)
+    await callback.answer()
+
+@router.callback_query(F.data == "back_to_menu")
+async def back_to_menu(callback: CallbackQuery):
+    session = SessionLocal()
+    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    session.close()
+    
+    if user:
+        await callback.message.edit_text(
+            f"👋 Главное меню, {user.play_nick}!",
+            reply_markup=main_menu()
+        )
+    else:
+        await callback.message.edit_text(
+            "👋 Главное меню",
+            reply_markup=main_menu()
+        )
+    await callback.answer()
+
+# ========== АДМИН-КОМАНДЫ ==========
 @router.message(F.text == "/id")
 async def show_user_id(message: Message):
-    """Показывает ID пользователя"""
     await message.answer(
         f"🆔 Ваш Telegram ID: <code>{message.from_user.id}</code>\n\n"
         f"📌 Скопируйте этот ID для передачи владельцу бота."
@@ -509,7 +781,6 @@ async def show_user_id(message: Message):
 
 @router.message(F.text.startswith("/add_admin"))
 async def add_admin(message: Message):
-    """Добавляет администратора (только для владельца)"""
     session = SessionLocal()
     owner = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -556,7 +827,6 @@ async def add_admin(message: Message):
 
 @router.message(F.text.startswith("/remove_admin"))
 async def remove_admin(message: Message):
-    """Удаляет администратора (только для владельца)"""
     session = SessionLocal()
     owner = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -603,7 +873,6 @@ async def remove_admin(message: Message):
 
 @router.message(F.text == "/admins")
 async def list_admins(message: Message):
-    """Показывает список администраторов (только для владельца)"""
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -628,7 +897,6 @@ async def list_admins(message: Message):
 
 @router.message(F.text.startswith("/ban"))
 async def ban_user(message: Message):
-    """Банит пользователя (только для админов и владельца)"""
     session = SessionLocal()
     admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -670,7 +938,6 @@ async def ban_user(message: Message):
 
 @router.message(F.text.startswith("/unban"))
 async def unban_user(message: Message):
-    """Разбанивает пользователя (только для админов и владельца)"""
     session = SessionLocal()
     admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -699,7 +966,6 @@ async def unban_user(message: Message):
 
 @router.message(F.text.startswith("/scam"))
 async def scam_user(message: Message):
-    """Ставит метку СКАМЕР (только для админов и владельца)"""
     session = SessionLocal()
     admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -741,7 +1007,6 @@ async def scam_user(message: Message):
 
 @router.message(F.text.startswith("/unscam"))
 async def unscam_user(message: Message):
-    """Снимает метку СКАМЕР (только для админов и владельца)"""
     session = SessionLocal()
     admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -770,7 +1035,6 @@ async def unscam_user(message: Message):
 
 @router.message(F.text == "/stats")
 async def full_stats(message: Message):
-    """Показывает полную статистику бота (только для админов и владельца)"""
     session = SessionLocal()
     admin = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
