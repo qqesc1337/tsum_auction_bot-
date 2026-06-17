@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from database import SessionLocal, User
@@ -11,23 +11,29 @@ class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
 
-def main_menu(is_admin=False, is_owner=False):
+# ========== INLINE МЕНЮ (кнопки в сообщении) ==========
+def main_menu_inline(is_admin=False, is_owner=False):
     keyboard = [
-        [KeyboardButton(text="📊 Моя статистика"), KeyboardButton(text="👤 Мой профиль")],
-        [KeyboardButton(text="➕ Создать лот"), KeyboardButton(text="📋 Активные аукционы")],
-        [KeyboardButton(text="📈 Мои лоты"), KeyboardButton(text="🏆 Достижения")],
-        [KeyboardButton(text="⭐ Избранное"), KeyboardButton(text="🎲 Случайный лот")],
-        [KeyboardButton(text="🔍 Поиск"), KeyboardButton(text="📖 Инструкция")],
-        [KeyboardButton(text="🏆 Топ пользователей")]
+        [InlineKeyboardButton(text="📊 Моя статистика", callback_data="my_stats"),
+         InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+        [InlineKeyboardButton(text="➕ Создать лот", callback_data="create_lot"),
+         InlineKeyboardButton(text="📋 Активные аукционы", callback_data="active_lots")],
+        [InlineKeyboardButton(text="📈 Мои лоты", callback_data="my_lots"),
+         InlineKeyboardButton(text="🏆 Достижения", callback_data="achievements")],
+        [InlineKeyboardButton(text="⭐ Избранное", callback_data="favorites"),
+         InlineKeyboardButton(text="🎲 Случайный лот", callback_data="random_lot")],
+        [InlineKeyboardButton(text="🔍 Поиск", callback_data="search_lots"),
+         InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
+        [InlineKeyboardButton(text="🏆 Топ пользователей", callback_data="top_users")]
     ]
     
     if is_admin or is_owner:
-        keyboard.append([KeyboardButton(text="🛠 Админ-панель")])
+        keyboard.append([InlineKeyboardButton(text="🛠 Админ-панель", callback_data="admin_panel")])
     
     if is_owner:
-        keyboard.append([KeyboardButton(text="👑 Управление админами")])
+        keyboard.append([InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage")])
     
-    return ReplyKeyboardMarkup(keyboard=keyboard, resize_keyboard=True)
+    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
@@ -49,7 +55,7 @@ async def cmd_start(message: Message, state: FSMContext):
         
         await message.answer(
             welcome_text,
-            reply_markup=main_menu(is_admin, is_owner)
+            reply_markup=main_menu_inline(is_admin, is_owner)
         )
     else:
         await message.answer(
@@ -102,6 +108,85 @@ async def reg_play(message: Message, state: FSMContext):
         f"✅ Регистрация завершена!\n"
         f"🎮 Твой ник в TSUM: <b>{message.text}</b>\n"
         f"📱 Твой TG: @{data['tg_nick']}",
-        reply_markup=main_menu()
+        reply_markup=main_menu_inline()
     )
     await state.clear()
+
+# ========== ОБРАБОТЧИКИ INLINE КНОПОК ==========
+@router.callback_query(F.data == "my_profile")
+async def my_profile_callback(callback: CallbackQuery):
+    from handlers.profile import show_my_profile
+    await show_my_profile(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "my_stats")
+async def my_stats_callback(callback: CallbackQuery):
+    from handlers.profile import my_stats
+    await my_stats(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "create_lot")
+async def create_lot_callback(callback: CallbackQuery, state: FSMContext):
+    from handlers.auction import create_lot_start
+    await create_lot_start(callback.message, state)
+    await callback.answer()
+
+@router.callback_query(F.data == "active_lots")
+async def active_lots_callback(callback: CallbackQuery):
+    from handlers.auction import active_auctions
+    await active_auctions(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "my_lots")
+async def my_lots_callback(callback: CallbackQuery):
+    from handlers.auction import my_lots
+    await my_lots(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "achievements")
+async def achievements_callback(callback: CallbackQuery):
+    from handlers.extra_features import show_achievements
+    await show_achievements(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "favorites")
+async def favorites_callback(callback: CallbackQuery):
+    from handlers.extra_features import show_favorites
+    await show_favorites(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "random_lot")
+async def random_lot_callback(callback: CallbackQuery):
+    from handlers.extra_features import random_lot
+    await random_lot(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "search_lots")
+async def search_lots_callback(callback: CallbackQuery, state: FSMContext):
+    from handlers.extra_features import search_start
+    await search_start(callback.message, state)
+    await callback.answer()
+
+@router.callback_query(F.data == "instructions")
+async def instructions_callback(callback: CallbackQuery):
+    from handlers.extra_features import show_instructions
+    await show_instructions(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "top_users")
+async def top_users_callback(callback: CallbackQuery):
+    from handlers.extra_features import top_users
+    await top_users(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_panel")
+async def admin_panel_callback(callback: CallbackQuery):
+    from handlers.admin import admin_panel
+    await admin_panel(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "admin_manage")
+async def admin_manage_callback(callback: CallbackQuery):
+    from handlers.admin import admin_manage
+    await admin_manage(callback.message)
+    await callback.answer()
