@@ -11,7 +11,6 @@ class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
 
-# ========== ГЛАВНОЕ МЕНЮ ==========
 def main_menu(is_admin=False, is_owner=False):
     keyboard = [
         [KeyboardButton(text="📊 Моя статистика"), KeyboardButton(text="👤 Мой профиль")],
@@ -36,9 +35,21 @@ async def cmd_start(message: Message, state: FSMContext):
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
     if user:
+        is_admin = user.is_admin or user.is_owner
+        is_owner = user.is_owner
+        
+        welcome_text = f"👋 С возвращением, {user.play_nick}!\n"
+        welcome_text += f"⭐ Рейтинг: {user.rating:.1f}\n"
+        welcome_text += f"📦 Сделок: {user.deals_count}\n"
+        
+        if user.is_owner:
+            welcome_text += "\n👑 Вы — ВЛАДЕЛЕЦ бота!"
+        elif user.is_admin:
+            welcome_text += "\n🔑 Вы — АДМИНИСТРАТОР!"
+        
         await message.answer(
-            f"👋 С возвращением, {user.play_nick}!",
-            reply_markup=main_menu(user.is_admin or user.is_owner, user.is_owner)
+            welcome_text,
+            reply_markup=main_menu(is_admin, is_owner)
         )
     else:
         await message.answer(
@@ -66,6 +77,7 @@ async def reg_play(message: Message, state: FSMContext):
     existing = session.query(User).filter_by(play_nick=message.text).first()
     if existing:
         await message.answer("❌ Этот ник уже занят! Введите другой:")
+        session.close()
         return
     
     new_user = User(
@@ -87,7 +99,9 @@ async def reg_play(message: Message, state: FSMContext):
     session.close()
     
     await message.answer(
-        f"✅ Регистрация завершена!",
+        f"✅ Регистрация завершена!\n"
+        f"🎮 Твой ник в TSUM: <b>{message.text}</b>\n"
+        f"📱 Твой TG: @{data['tg_nick']}",
         reply_markup=main_menu()
     )
     await state.clear()
