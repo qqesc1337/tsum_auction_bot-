@@ -6,7 +6,11 @@ from database import SessionLocal, User, Review, Achievement, Lot
 
 router = Router()
 
-@router.message(F.text == "👤 Мой профиль")
+class ReviewState(StatesGroup):
+    rating = State()
+    text = State()
+
+# ========== ПРОФИЛЬ ==========
 async def show_my_profile(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
@@ -25,17 +29,22 @@ async def show_my_profile(message: Message):
     user.rating = avg_rating
     session.commit()
     
+    scam_label = "🚫 СКАМЕР" if user.is_scammer else "✅ Проверен"
+    ban_label = "⛔ ЗАБАНЕН" if user.is_banned else "🟢 Активен"
+    
     text = f"👤 <b>Твой профиль</b>\n\n"
     text += f"🎮 TSUM: <b>{user.play_nick}</b>\n"
     text += f"📱 TG: @{user.tg_username}\n"
     text += f"⭐ Рейтинг: {user.rating:.1f} (отзывов: {len(reviews)})\n"
     text += f"📦 Сделок: {user.deals_count}\n"
     text += f"🏆 Достижение: {achievement.icon} {achievement.name if achievement else 'Нет'}\n"
+    text += f"📊 Статус: {ban_label}\n"
+    text += f"🔰 {scam_label}"
     
     await message.answer(text)
     session.close()
 
-@router.message(F.text == "📊 Моя статистика")
+# ========== СТАТИСТИКА ==========
 async def my_stats(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
@@ -65,3 +74,52 @@ async def my_stats(message: Message):
     
     await message.answer(text)
     session.close()
+
+# ========== ОТЗЫВЫ ==========
+@router.callback_query(F.data.startswith("leave_review_"))
+async def leave_review_start(callback: CallbackQuery, state: FSMContext):
+    target_id = int(callback.data.split("_")[2])
+    await state.update_data(target_id=target_id)
+    
+    await callback.message.answer(
+        "⭐ Оцените пользователя (1-5):\n"
+        "1 — ужасно\n"
+        "2 — плохо\n"
+        "3 — нормально\n"
+        "4 — хорошо\n"
+        "5 — отлично"
+    )
+    await state.set_state(ReviewState.rating)
+    await callback.answer()
+
+@router.message(ReviewState.rating)
+async def review_rating(message: Message, state: FSMContext):
+    try:
+        rating = int(message.text)
+        if rating < 1 or rating > 5:
+            await message.answer("❌ Оценка должна быть от 1 до 5!")
+            return
+        
+        await state.update_data(rating=rating)
+        await message.answer("✍️ Напишите текст отзыва:")
+        await state.set_state(ReviewState.text)
+    except ValueError:
+        await message.answer("❌ Введите число от 1 до 5!")
+
+@router.message(ReviewState.text)
+async def review_text(message: Message, state: FSMContext):
+    data = await state.get_data()
+    
+    session = SessionLocal()
+    new_review = Review(
+        target_id=data['target_id'],
+        author_id=message.from_user.id,
+        text=message.text,
+        rating=data['rating']
+    )
+    session.add(new_review)
+    session.commit()
+    session.close()
+    
+    await message.answer("✅ Отзыв сохранен! Спасибо за ваш отзыв.")
+    await state.clear()
