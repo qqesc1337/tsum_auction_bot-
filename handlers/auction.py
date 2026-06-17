@@ -14,30 +14,65 @@ class CreateLotState(StatesGroup):
     start_price = State()
     duration = State()
 
-@router.callback_query(F.data == "create_lot")
-async def create_lot_callback(callback: CallbackQuery, state: FSMContext):
+# ========== АКТИВНЫЕ АУКЦИОНЫ ==========
+async def active_auctions(message: Message):
     session = SessionLocal()
-    user = session.query(User).filter_by(tg_id=callback.from_user.id).first()
+    lots = session.query(Lot).filter_by(is_active=True).all()
+    session.close()
+    
+    if not lots:
+        await message.answer("📭 Активных аукционов нет.")
+        return
+    
+    text = "📋 <b>Активные аукционы:</b>\n\n"
+    for i, lot in enumerate(lots[:10], 1):
+        time_left = lot.end_time - datetime.utcnow()
+        minutes = int(time_left.total_seconds() / 60)
+        text += f"{i}. {lot.title} — {lot.current_price:,.0f}$ (⏳ {minutes} мин.)\n"
+    
+    if len(lots) > 10:
+        text += f"\n... и еще {len(lots) - 10} лотов"
+    
+    await message.answer(text)
+
+# ========== МОИ ЛОТЫ ==========
+async def my_lots(message: Message):
+    session = SessionLocal()
+    lots = session.query(Lot).filter_by(seller_id=message.from_user.id).all()
+    session.close()
+    
+    if not lots:
+        await message.answer("📭 У вас нет созданных лотов.")
+        return
+    
+    text = "📈 <b>Ваши лоты:</b>\n\n"
+    for lot in lots:
+        status = "🟢 Активен" if lot.is_active else "🔴 Завершен"
+        sold = "✅ Продан" if lot.is_sold else "❌ Не продан"
+        text += f"• {lot.title} — {lot.current_price:,.0f}$ | {status} | {sold}\n"
+    
+    await message.answer(text)
+
+# ========== СОЗДАНИЕ ЛОТА ==========
+async def create_lot_start(message: Message, state: FSMContext):
+    session = SessionLocal()
+    user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     session.close()
     
     if not user:
-        await callback.message.answer("❌ Сначала зарегистрируйтесь /start")
-        await callback.answer()
+        await message.answer("❌ Сначала зарегистрируйтесь /start")
         return
     
     if user.is_banned:
-        await callback.message.answer("⛔ Вы забанены!")
-        await callback.answer()
+        await message.answer("⛔ Вы забанены!")
         return
     
     if user.is_scammer:
-        await callback.message.answer("⛔ Вы помечены как скамер!")
-        await callback.answer()
+        await message.answer("⛔ Вы помечены как скамер!")
         return
     
-    await callback.message.answer("📝 Введите название предмета:")
+    await message.answer("📝 Введите название предмета:")
     await state.set_state(CreateLotState.title)
-    await callback.answer()
 
 @router.message(CreateLotState.title)
 async def lot_title(message: Message, state: FSMContext):
