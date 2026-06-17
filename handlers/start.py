@@ -27,14 +27,6 @@ def main_menu_inline(is_admin=False, is_owner=False):
         [InlineKeyboardButton(text="🏆 Топ пользователей", callback_data="top_users")]
     ]
     return InlineKeyboardMarkup(inline_keyboard=keyboard)
-    
-    if is_admin or is_owner:
-        keyboard.append([InlineKeyboardButton(text="🛠 Админ-панель", callback_data="admin_panel")])
-    
-    if is_owner:
-        keyboard.append([InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 @router.message(F.text == "/start")
 async def cmd_start(message: Message, state: FSMContext):
@@ -67,6 +59,7 @@ async def cmd_start(message: Message, state: FSMContext):
     
     session.close()
 
+# ========== РЕГИСТРАЦИЯ ==========
 @router.message(RegisterState.wait_tg_nick)
 async def reg_tg(message: Message, state: FSMContext):
     if message.text.startswith('@'):
@@ -113,111 +106,80 @@ async def reg_play(message: Message, state: FSMContext):
     )
     await state.clear()
 
-# ========== ОБРАБОТЧИКИ ОСТАЛЬНЫХ КНОПОК ==========
+# ========== ОБРАБОТЧИКИ ВСЕХ КНОПОК ==========
+@router.callback_query(F.data == "my_stats")
+async def my_stats_callback(callback: CallbackQuery):
+    from handlers.profile import my_stats
+    await callback.message.delete()  # Удаляем старое сообщение
+    await my_stats(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "my_profile")
+async def my_profile_callback(callback: CallbackQuery):
+    from handlers.profile import show_my_profile
+    await callback.message.delete()
+    await show_my_profile(callback.message)
+    await callback.answer()
+
 @router.callback_query(F.data == "create_lot")
 async def create_lot_callback(callback: CallbackQuery, state: FSMContext):
     from handlers.auction import create_lot_start
+    await callback.message.delete()
     await create_lot_start(callback.message, state)
     await callback.answer()
 
 @router.callback_query(F.data == "active_lots")
 async def active_lots_callback(callback: CallbackQuery):
     from handlers.auction import active_auctions
+    await callback.message.delete()
     await active_auctions(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "my_lots")
 async def my_lots_callback(callback: CallbackQuery):
     from handlers.auction import my_lots
+    await callback.message.delete()
     await my_lots(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "achievements")
 async def achievements_callback(callback: CallbackQuery):
     from handlers.extra_features import show_achievements
+    await callback.message.delete()
     await show_achievements(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "favorites")
 async def favorites_callback(callback: CallbackQuery):
     from handlers.extra_features import show_favorites
+    await callback.message.delete()
     await show_favorites(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "random_lot")
 async def random_lot_callback(callback: CallbackQuery):
     from handlers.extra_features import random_lot
+    await callback.message.delete()
     await random_lot(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "search_lots")
 async def search_lots_callback(callback: CallbackQuery, state: FSMContext):
     from handlers.extra_features import search_start
+    await callback.message.delete()
     await search_start(callback.message, state)
     await callback.answer()
 
 @router.callback_query(F.data == "instructions")
 async def instructions_callback(callback: CallbackQuery):
     from handlers.extra_features import show_instructions
+    await callback.message.delete()
     await show_instructions(callback.message)
     await callback.answer()
 
 @router.callback_query(F.data == "top_users")
 async def top_users_callback(callback: CallbackQuery):
     from handlers.extra_features import top_users
-    await top_users(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "admin_panel")
-async def admin_panel_callback(callback: CallbackQuery):
-    from handlers.admin import admin_panel
-    await admin_panel(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "admin_manage")
-async def admin_manage_callback(callback: CallbackQuery):
-    from handlers.admin import admin_manage
-    await admin_manage(callback.message)
-    await callback.answer()
-# ========== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ ==========
-@router.callback_query(F.data == "active_lots")
-async def active_lots_callback(callback: CallbackQuery):
-    from handlers.auction import active_auctions
-    await active_auctions(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "my_lots")
-async def my_lots_callback(callback: CallbackQuery):
-    from handlers.auction import my_lots
-    await my_lots(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "achievements")
-async def achievements_callback(callback: CallbackQuery):
-    from handlers.extra_features import show_achievements
-    await show_achievements(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "random_lot")
-async def random_lot_callback(callback: CallbackQuery):
-    from handlers.extra_features import random_lot
-    await random_lot(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "search_lots")
-async def search_lots_callback(callback: CallbackQuery, state: FSMContext):
-    from handlers.extra_features import search_start
-    await search_start(callback.message, state)
-    await callback.answer()
-
-@router.callback_query(F.data == "instructions")
-async def instructions_callback(callback: CallbackQuery):
-    from handlers.extra_features import show_instructions
-    await show_instructions(callback.message)
-    await callback.answer()
-
-@router.callback_query(F.data == "top_users")
-async def top_users_callback(callback: CallbackQuery):
-    from handlers.extra_features import top_users
+    await callback.message.delete()
     await top_users(callback.message)
     await callback.answer()
