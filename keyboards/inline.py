@@ -36,26 +36,3 @@ def bet_keyboard(lot_id, current_price):
         [InlineKeyboardButton(text="✏️ Своя сумма", callback_data=f"bet_custom_{lot_id}")],
         [InlineKeyboardButton(text="↩️ Назад", callback_data=f"back_to_lot_{lot_id}")]
     ])
-
-def main_menu_keyboard(is_admin=False, is_owner=False):
-    keyboard = [
-        [InlineKeyboardButton(text="📊 Моя статистика", callback_data="my_stats"),
-         InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
-        [InlineKeyboardButton(text="➕ Создать лот", callback_data="create_lot"),
-         InlineKeyboardButton(text="📋 Активные аукционы", callback_data="active_lots")],
-        [InlineKeyboardButton(text="📈 Мои лоты", callback_data="my_lots"),
-         InlineKeyboardButton(text="🏆 Достижения", callback_data="achievements")],
-        [InlineKeyboardButton(text="⭐ Избранное", callback_data="favorites"),
-         InlineKeyboardButton(text="🎲 Случайный лот", callback_data="random_lot")],
-        [InlineKeyboardButton(text="🔍 Поиск", callback_data="search_lots"),
-         InlineKeyboardButton(text="📖 Инструкция", callback_data="instructions")],
-        [InlineKeyboardButton(text="🏆 Топ пользователей", callback_data="top_users")]
-    ]
-    
-    if is_admin or is_owner:
-        keyboard.append([InlineKeyboardButton(text="🛠 Админ-панель", callback_data="admin_panel")])
-    
-    if is_owner:
-        keyboard.append([InlineKeyboardButton(text="👑 Управление админами", callback_data="admin_manage")])
-    
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
