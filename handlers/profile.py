@@ -2,7 +2,7 @@ from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
-from database import SessionLocal, User, Review, Achievement, Lot  # ← ДОБАВИЛ Lot
+from database import SessionLocal, User, Review, Achievement, Lot
 
 router = Router()
 
@@ -11,7 +11,7 @@ class ReviewState(StatesGroup):
     text = State()
 
 # ========== ПРОФИЛЬ ==========
-async def show_my_profile(message: Message):  # ← export
+async def show_my_profile(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
@@ -45,7 +45,7 @@ async def show_my_profile(message: Message):  # ← export
     session.close()
 
 # ========== СТАТИСТИКА ==========
-async def my_stats(message: Message):  # ← export
+async def my_stats(message: Message):
     session = SessionLocal()
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
