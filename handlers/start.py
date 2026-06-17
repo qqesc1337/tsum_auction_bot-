@@ -179,3 +179,45 @@ async def admin_manage_callback(callback: CallbackQuery):
     from handlers.admin import admin_manage
     await admin_manage(callback.message)
     await callback.answer()
+# ========== ОСТАЛЬНЫЕ ОБРАБОТЧИКИ ==========
+@router.callback_query(F.data == "active_lots")
+async def active_lots_callback(callback: CallbackQuery):
+    from handlers.auction import active_auctions
+    await active_auctions(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "my_lots")
+async def my_lots_callback(callback: CallbackQuery):
+    from handlers.auction import my_lots
+    await my_lots(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "achievements")
+async def achievements_callback(callback: CallbackQuery):
+    from handlers.extra_features import show_achievements
+    await show_achievements(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "random_lot")
+async def random_lot_callback(callback: CallbackQuery):
+    from handlers.extra_features import random_lot
+    await random_lot(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "search_lots")
+async def search_lots_callback(callback: CallbackQuery, state: FSMContext):
+    from handlers.extra_features import search_start
+    await search_start(callback.message, state)
+    await callback.answer()
+
+@router.callback_query(F.data == "instructions")
+async def instructions_callback(callback: CallbackQuery):
+    from handlers.extra_features import show_instructions
+    await show_instructions(callback.message)
+    await callback.answer()
+
+@router.callback_query(F.data == "top_users")
+async def top_users_callback(callback: CallbackQuery):
+    from handlers.extra_features import top_users
+    await top_users(callback.message)
+    await callback.answer()
