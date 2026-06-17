@@ -11,9 +11,8 @@ class RegisterState(StatesGroup):
     wait_tg_nick = State()
     wait_play_nick = State()
 
-# ========== ГЛАВНОЕ МЕНЮ (Reply кнопки) ==========
-def get_main_keyboard(is_admin=False, is_owner=False):
-    """Обычные Reply кнопки (видны в поле ввода)"""
+# ========== ГЛАВНОЕ МЕНЮ ==========
+def main_menu(is_admin=False, is_owner=False):
     keyboard = [
         [KeyboardButton(text="📊 Моя статистика"), KeyboardButton(text="👤 Мой профиль")],
         [KeyboardButton(text="➕ Создать лот"), KeyboardButton(text="📋 Активные аукционы")],
@@ -37,32 +36,19 @@ async def cmd_start(message: Message, state: FSMContext):
     user = session.query(User).filter_by(tg_id=message.from_user.id).first()
     
     if user:
-        is_admin = user.is_admin or user.is_owner
-        is_owner = user.is_owner
-        
-        welcome_text = f"👋 С возвращением, {user.play_nick}!\n"
-        welcome_text += f"⭐ Рейтинг: {user.rating:.1f}\n"
-        welcome_text += f"📦 Сделок: {user.deals_count}\n"
-        
-        if user.is_owner:
-            welcome_text += "\n👑 Вы — ВЛАДЕЛЕЦ бота!"
-        elif user.is_admin:
-            welcome_text += "\n🔑 Вы — АДМИНИСТРАТОР!"
-        
         await message.answer(
-            welcome_text,
-            reply_markup=get_main_keyboard(is_admin, is_owner)
+            f"👋 С возвращением, {user.play_nick}!",
+            reply_markup=main_menu(user.is_admin or user.is_owner, user.is_owner)
         )
     else:
         await message.answer(
             "👋 Добро пожаловать в TSUM Auction!\n\n"
-            "📌 Для регистрации введите ваш ник в Telegram (без @):"
+            "📌 Введите ваш ник в Telegram (без @):"
         )
         await state.set_state(RegisterState.wait_tg_nick)
     
     session.close()
 
-# ========== РЕГИСТРАЦИЯ ==========
 @router.message(RegisterState.wait_tg_nick)
 async def reg_tg(message: Message, state: FSMContext):
     if message.text.startswith('@'):
@@ -101,10 +87,7 @@ async def reg_play(message: Message, state: FSMContext):
     session.close()
     
     await message.answer(
-        f"✅ Регистрация завершена!\n"
-        f"🎮 Твой ник в TSUM: <b>{message.text}</b>\n"
-        f"📱 Твой TG: @{data['tg_nick']}\n\n"
-        f"Теперь ты можешь создавать лоты и участвовать в аукционах!",
-        reply_markup=get_main_keyboard()
+        f"✅ Регистрация завершена!",
+        reply_markup=main_menu()
     )
     await state.clear()
